@@ -5,12 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Penerjemah Bahasa Isyarat AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0f172a; /* Slate 900 */
-            color: #f8fafc; /* Slate 50 */
+            /* Background gradient pastel pink ke purple */
+            background: linear-gradient(135deg, #fdf2f8 0%, #f3e8ff 100%); 
+            color: #4c1d95; /* Text dark purple */
+            min-height: 100vh;
         }
         
         /* Mirror video and canvas */
@@ -18,16 +20,18 @@
             transform: scaleX(-1);
         }
 
+        /* Glassmorphism terang */
         .glass-panel {
-            background: rgba(30, 41, 59, 0.7); /* Slate 800 with opacity */
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 10px 25px rgba(216, 180, 254, 0.2); /* Shadow pastel purple */
         }
 
         .loader {
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-left-color: #3b82f6; /* Blue 500 */
+            border: 4px solid rgba(216, 180, 254, 0.3); /* purple-300 */
+            border-left-color: #d946ef; /* fuchsia-500 */
             border-radius: 50%;
             width: 40px;
             height: 40px;
@@ -38,6 +42,18 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* Custom scrollbar untuk panel kata */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d8b4fe;
+            border-radius: 10px;
+        }
     </style>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -45,19 +61,19 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
-<body class="min-h-screen flex flex-col items-center p-4 md:p-8">
+<body class="flex flex-col items-center p-4 md:p-8">
 
     <!-- Header -->
-    <header class="w-full max-w-5xl flex justify-between items-center mb-8">
+    <header class="w-full max-w-5xl flex flex-col md:flex-row justify-between items-center mb-8 gap-4 text-center md:text-left">
         <div>
-            <h1 class="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
+            <h1 class="text-3xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-purple-600 drop-shadow-sm">
                 SignLanguage AI
             </h1>
-            <p class="text-slate-400 mt-2">Prototipe Pendeteksi Pola Jari & Penerjemah Isyarat</p>
+            <p class="text-purple-800/70 mt-2 font-medium">Prototipe Pendeteksi Pola Jari & Penerjemah Isyarat</p>
         </div>
-        <div class="hidden md:flex items-center space-x-2 text-sm text-slate-400 bg-slate-800 py-2 px-4 rounded-full">
-            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-            <span>MediaPipe Hands Aktif</span>
+        <div class="flex items-center space-x-2 text-sm text-purple-900 bg-white/80 py-2 px-4 rounded-full shadow-sm border border-purple-100">
+            <span class="w-2.5 h-2.5 rounded-full bg-pink-500 animate-pulse"></span>
+            <span class="font-semibold">Sistem Siap</span>
         </div>
     </header>
 
@@ -65,24 +81,27 @@
     <main class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         <!-- Camera Section (Left) -->
-        <section class="lg:col-span-2 glass-panel rounded-3xl overflow-hidden shadow-2xl relative flex flex-col">
+        <section class="lg:col-span-2 glass-panel rounded-3xl overflow-hidden relative flex flex-col border-2 border-white">
             
-            <!-- Loading Screen Overlay -->
-            <div id="loading-screen" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-sm">
-                <div class="loader mb-4"></div>
-                <p class="text-lg font-semibold animate-pulse text-blue-400">Memuat Model AI & Kamera...</p>
-                <p class="text-sm text-slate-400 mt-2 text-center px-4">Pastikan kamu memberikan izin akses kamera pada browser.</p>
-            </div>
-
             <!-- Video & Canvas Container -->
-            <div class="relative w-full aspect-video bg-black flex-grow">
+            <div class="relative w-full aspect-video bg-purple-50 flex-grow">
+                <!-- Loading Screen Overlay (Dipindah ke dalam container video agar tidak menutupi tombol) -->
+                <div id="loading-screen" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/80 backdrop-blur-md transition-opacity duration-300">
+                    <div class="loader mb-4" id="loader-spinner"></div>
+                    <p id="loading-text" class="text-lg font-bold text-purple-600 text-center px-4">Klik 'Mulai Kamera' di bawah untuk mencoba.</p>
+                    <p id="loading-subtext" class="text-sm text-purple-800/60 mt-2 text-center px-4 max-w-md">Pastikan kamu memberikan izin akses kamera pada browser saat diminta.</p>
+                </div>
+
+                <!-- Video disembunyikan tapi tetap menangkap gambar -->
                 <video id="input_video" class="absolute inset-0 w-full h-full object-cover mirrored hidden" playsinline></video>
+                <!-- Canvas untuk menggambar hasil AI -->
                 <canvas id="output_canvas" class="absolute inset-0 w-full h-full object-cover mirrored z-10"></canvas>
             </div>
             
-            <div class="p-4 bg-slate-800/50 flex justify-between items-center z-10 border-t border-slate-700">
-                <p class="text-sm text-slate-300">Arahkan tanganmu ke kamera dengan jelas.</p>
-                <button id="btn-toggle-cam" class="bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 rounded-xl text-sm font-semibold transition-colors duration-200 shadow-lg shadow-blue-500/30">
+            <!-- Area Kontrol & Tombol -->
+            <div class="p-5 bg-white/60 flex flex-col sm:flex-row justify-between items-center z-10 border-t border-purple-100 gap-4">
+                <p class="text-sm text-purple-800 font-medium text-center sm:text-left">Arahkan tanganmu ke kamera dengan jelas.</p>
+                <button id="btn-toggle-cam" class="w-full sm:w-auto bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 text-white py-2.5 px-6 rounded-2xl text-sm font-bold transition-all duration-300 shadow-lg shadow-pink-300/50 transform active:scale-95">
                     Mulai Kamera
                 </button>
             </div>
@@ -92,33 +111,35 @@
         <section class="flex flex-col gap-6">
             
             <!-- Current Detection Card -->
-            <div class="glass-panel p-6 rounded-3xl flex flex-col items-center justify-center shadow-xl border-t-4 border-blue-500 text-center relative overflow-hidden">
-                <div class="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/20 blur-3xl rounded-full"></div>
-                <p class="text-slate-400 text-sm font-medium mb-2 z-10">Mendeteksi Pola</p>
-                <div class="h-32 flex items-center justify-center z-10">
-                    <h2 id="current-gesture" class="text-7xl font-bold text-white tracking-tighter drop-shadow-md">?</h2>
-                </div>
-                <p id="gesture-desc" class="text-blue-400 text-sm font-medium mt-2 z-10 h-6">Belum ada tangan</p>
+            <div class="glass-panel p-6 rounded-3xl flex flex-col items-center justify-center border-t-4 border-pink-400 text-center relative overflow-hidden h-64">
+                <div class="absolute -top-10 -right-10 w-32 h-32 bg-pink-300/30 blur-3xl rounded-full"></div>
+                <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-purple-300/30 blur-3xl rounded-full"></div>
                 
-                <button id="btn-add-letter" class="mt-6 w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white py-3 px-4 rounded-xl font-bold transition-all duration-200 transform active:scale-95 shadow-lg shadow-purple-500/25 z-10 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                <p class="text-purple-800/60 text-sm font-bold mb-2 z-10 uppercase tracking-wider">Mendeteksi Pola</p>
+                <div class="flex-grow flex items-center justify-center z-10">
+                    <h2 id="current-gesture" class="text-8xl font-black text-purple-300 drop-shadow-sm transition-colors duration-200">?</h2>
+                </div>
+                <p id="gesture-desc" class="text-purple-500 text-sm font-bold mt-2 z-10 bg-white/50 px-3 py-1 rounded-full">Belum ada tangan</p>
+                
+                <button id="btn-add-letter" class="mt-4 w-full bg-white border-2 border-pink-200 hover:border-pink-400 text-pink-600 py-3 px-4 rounded-xl font-bold transition-all duration-200 transform active:scale-95 shadow-sm z-10 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:border-gray-200 disabled:text-gray-400" disabled>
                     + Simpan Huruf
                 </button>
             </div>
 
             <!-- Word Builder Card -->
-            <div class="glass-panel p-6 rounded-3xl shadow-xl flex-grow flex flex-col">
+            <div class="glass-panel p-6 rounded-3xl flex-grow flex flex-col h-full min-h-[200px]">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-lg font-semibold text-slate-200">Kata Dirangkai</h3>
-                    <button id="btn-clear" class="text-slate-400 hover:text-red-400 transition-colors text-sm font-medium">Hapus</button>
+                    <h3 class="text-lg font-bold text-purple-900">Kata Dirangkai</h3>
+                    <button id="btn-clear" class="text-pink-500 hover:text-pink-600 hover:bg-pink-50 px-3 py-1 rounded-lg transition-colors text-sm font-bold">Bersihkan</button>
                 </div>
-                <div class="bg-slate-900/50 rounded-2xl p-4 flex-grow flex items-center justify-center border border-slate-700/50 min-h-[100px]">
-                    <p id="constructed-word" class="text-3xl font-mono font-bold tracking-widest text-emerald-400 break-words text-center">
-                        <span class="text-slate-600">...</span>
+                <div class="bg-white/70 rounded-2xl p-4 flex-grow flex items-center justify-center border border-purple-100 shadow-inner overflow-y-auto">
+                    <p id="constructed-word" class="text-3xl font-mono font-bold tracking-widest text-purple-700 break-words text-center">
+                        <span class="text-purple-300">...</span>
                     </p>
                 </div>
-                <div class="flex gap-2 mt-4">
-                    <button id="btn-space" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-xl text-sm transition-colors">Spasi</button>
-                    <button id="btn-backspace" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-xl text-sm transition-colors">Backspace</button>
+                <div class="flex gap-3 mt-4">
+                    <button id="btn-space" class="flex-1 bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold py-2.5 rounded-xl text-sm transition-colors shadow-sm">Spasi</button>
+                    <button id="btn-backspace" class="flex-1 bg-pink-100 hover:bg-pink-200 text-pink-700 font-bold py-2.5 rounded-xl text-sm transition-colors shadow-sm">Hapus 1</button>
                 </div>
             </div>
 
@@ -126,46 +147,48 @@
 
     </main>
 
-    <!-- Instructions Guide -->
-    <section class="w-full max-w-5xl mt-8 glass-panel rounded-3xl p-6 md:p-8">
-        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
-            <span class="text-blue-400">💡</span> Panduan Gestur yang Didukung
-        </h3>
-        <p class="text-slate-400 text-sm mb-6 max-w-3xl">Karena ini adalah prototipe, sistem menggunakan logika kondisi jari (terbuka/tertutup). Cobalah bentuk tangan berikut ke kamera. Gunakan tangan kanan untuk hasil terbaik.</p>
+    <!-- Instructions Guide (Diperbarui untuk A-Z) -->
+    <section class="w-full max-w-5xl mt-8 glass-panel rounded-3xl p-6 md:p-8 border-2 border-white">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <h3 class="text-xl font-bold flex items-center gap-2 text-purple-900">
+                <span class="text-2xl">✨</span> Panduan Gestur Tangan (A-Z)
+            </h3>
+            <span class="text-xs bg-pink-100 text-pink-700 px-3 py-1 rounded-full font-semibold">Tiru gambar referensi ASL (image_7e92c6.png)</span>
+        </div>
         
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-                <span class="text-2xl font-bold text-white block mb-1">A</span>
-                <span class="text-slate-400">Ibu jari terbuka ke samping, jari lain mengepal.</span>
-            </div>
-            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-                <span class="text-2xl font-bold text-white block mb-1">B</span>
-                <span class="text-slate-400">Keempat jari lurus ke atas, ibu jari ditekuk ke dalam.</span>
-            </div>
-            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-                <span class="text-2xl font-bold text-white block mb-1">D</span>
-                <span class="text-slate-400">Jari telunjuk ke atas, jari lain membulat/mengepal.</span>
-            </div>
-            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-                <span class="text-2xl font-bold text-white block mb-1">I</span>
-                <span class="text-slate-400">Hanya jari kelingking yang lurus ke atas.</span>
-            </div>
-            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-                <span class="text-2xl font-bold text-white block mb-1">L</span>
-                <span class="text-slate-400">Ibu jari dan telunjuk membentuk huruf L.</span>
-            </div>
-            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-                <span class="text-2xl font-bold text-white block mb-1">V</span>
-                <span class="text-slate-400">Telunjuk dan tengah ke atas (peace).</span>
-            </div>
-            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-                <span class="text-2xl font-bold text-white block mb-1">W</span>
-                <span class="text-slate-400">Telunjuk, tengah, dan manis ke atas.</span>
-            </div>
-            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
-                <span class="text-2xl font-bold text-white block mb-1">Y</span>
-                <span class="text-slate-400">Ibu jari dan kelingking terbuka (telepon).</span>
-            </div>
+        <p class="text-purple-800/80 text-sm mb-6 max-w-3xl leading-relaxed">
+            Sistem kini mendeteksi 26 huruf (A-Z). <b>Gunakan tangan kananmu</b>. Perlu diingat: AI berbasis web 2D memiliki keterbatasan untuk membedakan huruf yang mirip/mengepal seperti <b>M, N, T, S, E</b> atau yang butuh gerakan seperti <b>J dan Z</b>. AI akan menebak kemungkinan terbaiknya.
+        </p>
+        
+        <!-- Grid A-Z -->
+        <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-9 gap-3 text-sm text-center">
+            <!-- A-Z Boxes -->
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">A</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">B</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">C</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">D</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">E</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">F</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">G</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">H</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">I</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm relative"><span class="text-lg font-black text-pink-500 block">J</span><span class="text-[10px] text-purple-400 absolute bottom-0 left-0 w-full">Gerak</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">K</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">L</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">M</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">N</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">O</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">P</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">Q</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">R</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">S</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">T</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">U</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">V</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">W</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">X</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm"><span class="text-lg font-black text-pink-500 block">Y</span></div>
+            <div class="bg-white/80 p-2 rounded-xl border border-purple-100 shadow-sm relative"><span class="text-lg font-black text-pink-500 block">Z</span><span class="text-[10px] text-purple-400 absolute bottom-0 left-0 w-full">Gerak</span></div>
         </div>
     </section>
 
@@ -174,7 +197,12 @@
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
+        
         const loadingScreen = document.getElementById('loading-screen');
+        const loadingText = document.getElementById('loading-text');
+        const loadingSubtext = document.getElementById('loading-subtext');
+        const loaderSpinner = document.getElementById('loader-spinner');
+        
         const currentGestureEl = document.getElementById('current-gesture');
         const gestureDescEl = document.getElementById('gesture-desc');
         const btnAddLetter = document.getElementById('btn-add-letter');
@@ -194,143 +222,169 @@
             return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
         }
 
+        // Logika Super (Advanced) untuk A-Z
         function detectGesture(landmarks) {
-            // Evaluasi Jari Terbuka (Extended) atau Tertutup
-            // Logika dasar: Bandingkan posisi Ujung Jari (Tip) dengan Buku Jari Tengah (PIP)
-            
-            // Jari Telunjuk (Index), Tengah (Middle), Manis (Ring), Kelingking (Pinky)
-            const isExtended = (tipIndex, pipIndex) => {
-                // Di layar kamera, sumbu Y mengecil ke arah atas layar.
-                // Jadi jika Y ujung jari < Y buku jari, berarti jari mengarah ke atas (terbuka).
-                return landmarks[tipIndex].y < landmarks[pipIndex].y;
-            };
+            // 0: Pergelangan tangan
+            // Jempol: 1, 2, 3, 4 (Ujung)
+            // Telunjuk: 5, 6, 7, 8 (Ujung)
+            // Tengah: 9, 10, 11, 12 (Ujung)
+            // Manis: 13, 14, 15, 16 (Ujung)
+            // Kelingking: 17, 18, 19, 20 (Ujung)
 
-            const indexOut = isExtended(8, 6);
-            const middleOut = isExtended(12, 10);
-            const ringOut = isExtended(16, 14);
-            const pinkyOut = isExtended(20, 18);
+            const wrist = landmarks[0];
+            
+            // 1. Cek jari terbuka (berdasarkan sumbu Y relatif terhadap pangkal)
+            const isExtended = (tip, mcp) => landmarks[tip].y < landmarks[mcp].y;
+            
+            // Khusus jempol, cek sumbu X (karena jempol buka ke samping)
+            const thumbIsOpen = landmarks[4].x < landmarks[3].x; // Untuk tangan kanan (mirrored)
+            
+            const indexUp = isExtended(8, 5);
+            const middleUp = isExtended(12, 9);
+            const ringUp = isExtended(16, 13);
+            const pinkyUp = isExtended(20, 17);
 
-            // Logika Ibu Jari (Thumb) sedikit berbeda karena arah putarannya.
-            // Kita bandingkan jarak ujung ibu jari(4) dengan pangkal kelingking(17).
-            // Jika ibu jari terbuka, jaraknya akan lebih jauh dibanding jarak buku ibu jari(3) ke pangkal kelingking.
-            const distThumbTip = getDistance(landmarks[4], landmarks[17]);
-            const distThumbIp = getDistance(landmarks[3], landmarks[17]);
-            const thumbOut = distThumbTip > distThumbIp + 0.02; // +0.02 sebagai margin toleransi
+            // 2. Fitur Tambahan (Jarak antar jari, ditekuk, dll)
+            const distIndexMiddle = getDistance(landmarks[8], landmarks[12]);
+            const distThumbIndex = getDistance(landmarks[4], landmarks[8]);
+            const distThumbMiddle = getDistance(landmarks[4], landmarks[12]);
+            const distThumbPinky = getDistance(landmarks[4], landmarks[20]);
+            
+            const indexMiddleCrossed = landmarks[8].x < landmarks[12].x; // Huruf R
+            const isFist = !indexUp && !middleUp && !ringUp && !pinkyUp; // Mengepal
+            const indexBent = landmarks[8].y > landmarks[6].y && landmarks[8].y < landmarks[5].y; // Huruf X
 
-            // Array Status Jari: [IbuJari, Telunjuk, Tengah, Manis, Kelingking]
-            const f = [thumbOut, indexOut, middleOut, ringOut, pinkyOut];
+            const allTouchingThumb = distThumbIndex < 0.05 && distThumbMiddle < 0.05; // Huruf O
+            const isPointingSideways = landmarks[8].x > landmarks[5].x + 0.05; // Huruf G, H
+            const isPointingDown = landmarks[8].y > wrist.y; // Huruf P, Q
 
-            // Fungsi pembantu untuk mencocokkan pola
-            const match = (pattern) => {
-                return f[0] === pattern[0] && f[1] === pattern[1] && 
-                       f[2] === pattern[2] && f[3] === pattern[3] && f[4] === pattern[4];
-            };
+            // 3. Sistem Klasifikasi Pola (Pencocokan Terbaik)
+            
+            // B, F, W, V, U, K, R (Jari terbuka ganda)
+            if (indexUp && middleUp && ringUp && pinkyUp && !thumbIsOpen) return { letter: "B", name: "Rapat Terbuka" };
+            if (!thumbIsOpen && indexUp && middleUp && ringUp && !pinkyUp) return { letter: "W", name: "Tiga Jari" };
+            if (indexUp && middleUp && !ringUp && !pinkyUp) {
+                if (indexMiddleCrossed) return { letter: "R", name: "Jari Silang" };
+                if (distIndexMiddle > 0.04) return { letter: "V", name: "Peace (Terbuka)" };
+                if (landmarks[4].y < landmarks[9].y) return { letter: "K", name: "Dua Jari + Jempol" }; // K (Jempol diselip)
+                return { letter: "U", name: "Dua Jari Rapat" };
+            }
+            if (!indexUp && middleUp && ringUp && pinkyUp && distThumbIndex < 0.05) return { letter: "F", name: "OK Sign" }; // F (Jempol & Telunjuk sentuh)
 
-            // PEMETAAN GESTUR (Berdasarkan ASL Sederhana)
-            // A: Ibu jari saja yang terbuka/di samping
-            if (match([true, false, false, false, false])) return { letter: "A", name: "Jempol / A" };
-            
-            // B: Semua jari kecuali jempol ke atas
-            if (match([false, true, true, true, true])) return { letter: "B", name: "Rapat Terbuka / B" };
-            
-            // D: Telunjuk saja (seperti menunjuk)
-            if (match([false, true, false, false, false])) return { letter: "D", name: "Telunjuk / D" };
-            
-            // I: Kelingking saja
-            if (match([false, false, false, false, true])) return { letter: "I", name: "Kelingking / I" };
-            
-            // L: Jempol & Telunjuk
-            if (match([true, true, false, false, false])) return { letter: "L", name: "Bentuk L" };
-            
-            // V / Peace: Telunjuk & Tengah
-            if (match([false, true, true, false, false])) return { letter: "V", name: "Peace / V" };
-            
-            // W: Telunjuk, Tengah, Manis
-            if (match([false, true, true, true, false])) return { letter: "W", name: "Tiga Jari / W" };
-            
-            // Y / Telepon: Jempol & Kelingking
-            if (match([true, false, false, false, true])) return { letter: "Y", name: "Telepon / Y" };
+            // D, I, L, X (Jari terbuka tunggal)
+            if (indexUp && !middleUp && !ringUp && !pinkyUp) {
+                if (thumbIsOpen) return { letter: "L", name: "Bentuk L" };
+                if (distThumbMiddle < 0.05) return { letter: "D", name: "Telunjuk Atas" };
+                if (isPointingSideways) return { letter: "G", name: "Tunjuk Samping" };
+                if (isPointingDown) return { letter: "Q", name: "Tunjuk Bawah" };
+                return { letter: "1", name: "Angka 1 (D/Z)" }; // Z butuh gerakan
+            }
+            if (!indexUp && !middleUp && !ringUp && pinkyUp) {
+                if (thumbIsOpen) return { letter: "Y", name: "Telepon" };
+                return { letter: "I", name: "Kelingking" }; // J butuh gerakan
+            }
 
-            // Gestur tambahan non-huruf
-            if (match([true, true, true, true, true])) return { letter: "✋", name: "Terbuka (Lima)" };
-            if (match([false, false, false, false, false])) return { letter: "✊", name: "Mengepal (S)" };
+            // G, H, P (Menunjuk samping/bawah)
+            if (isPointingSideways && !ringUp && !pinkyUp) {
+                if (middleUp) return { letter: "H", name: "Dua Jari Samping" };
+            }
+            if (isPointingDown && indexUp && middleUp) return { letter: "P", name: "K Bawah" };
 
-            return { letter: "?", name: "Tidak Dikenali" };
+            // O, C, E, X (Melengkung / Berpadu)
+            if (allTouchingThumb && !indexUp && !pinkyUp) return { letter: "O", name: "Membulat" };
+            if (indexBent && !middleUp && !ringUp && !pinkyUp) return { letter: "X", name: "Kait" };
+            if (!isFist && !indexUp && !middleUp && distThumbIndex > 0.05) return { letter: "C", name: "Bentuk C" }; // Pendekatan kasar C
+
+            // A, S, M, N, T, E (Kepalan / Fist - Sangat sulit dibedakan di 2D)
+            // Kita akan mencoba membedakan dari posisi jempol (titik 4) terhadap jari lain
+            if (isFist) {
+                if (thumbIsOpen) return { letter: "A", name: "Kepal Samping" };
+                if (landmarks[4].y > landmarks[10].y) return { letter: "E", name: "Kepal Rapat" }; // Jempol nempel di jari
+                
+                // M, N, T dibedakan dari seberapa jauh jempol melintang di bawah jari
+                if (landmarks[4].x < landmarks[13].x) return { letter: "M", name: "Jempol di bawah Manis" };
+                if (landmarks[4].x < landmarks[9].x) return { letter: "N", name: "Jempol di bawah Tengah" };
+                if (landmarks[4].x < landmarks[5].x) return { letter: "T", name: "Jempol di bawah Telunjuk" };
+                
+                return { letter: "S", name: "Kepalan Penuh" };
+            }
+
+            // Hand poses umum
+            if (thumbIsOpen && indexUp && middleUp && ringUp && pinkyUp) return { letter: "✋", name: "Terbuka (Lima)" };
+
+            return { letter: "?", name: "Mendeteksi..." };
         }
 
         function onResults(results) {
-            // Sembunyikan loading screen saat frame pertama berhasil diproses
-            if(loadingScreen.style.display !== 'none') {
-                loadingScreen.style.display = 'none';
+            // Sembunyikan loading screen jika masih muncul
+            if(!loadingScreen.classList.contains('hidden')) {
+                loadingScreen.classList.add('hidden');
             }
 
-            // Atur ukuran canvas menyesuaikan video
             canvasElement.width = videoElement.videoWidth;
             canvasElement.height = videoElement.videoHeight;
 
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
-            // Opsional: Gambar frame video asli ke canvas jika ingin menghilangkan border/styling bawaan video
-            // canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            // Gambar frame video ke canvas agar tidak perlu menampilkan tag video terpisah
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
             let detected = false;
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 detected = true;
-                
-                // Ambil tangan pertama yang terdeteksi
                 const landmarks = results.multiHandLandmarks[0];
                 
-                // Gambar garis koneksi kerangka tangan
+                // Tema Warna Canvas (Pink & Purple)
                 drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {
-                    color: '#3b82f6', // Blue 500
-                    lineWidth: 4
+                    color: '#c084fc', // purple-400
+                    lineWidth: 5
                 });
-                // Gambar titik (landmarks) sendi
                 drawLandmarks(canvasCtx, landmarks, {
-                    color: '#10b981', // Emerald 500
+                    color: '#ec4899', // pink-500
                     lineWidth: 2,
-                    radius: (data) => {
-                        return data.from ? 4 : 2;
-                    }
+                    radius: (data) => data.from ? 5 : 3
                 });
 
-                // Analisis Gestur
                 const gestureData = detectGesture(landmarks);
                 
                 if (gestureData.letter !== "?") {
                     currentGestureEl.innerText = gestureData.letter;
-                    currentGestureEl.classList.remove('text-white', 'text-slate-600');
-                    currentGestureEl.classList.add('text-emerald-400');
+                    currentGestureEl.classList.remove('text-purple-300');
+                    currentGestureEl.classList.add('text-pink-500');
                     
                     gestureDescEl.innerText = gestureData.name;
-                    gestureDescEl.classList.remove('text-blue-400');
-                    gestureDescEl.classList.add('text-emerald-300');
+                    gestureDescEl.classList.remove('text-purple-500', 'bg-white/50');
+                    gestureDescEl.classList.add('text-pink-700', 'bg-pink-100');
 
-                    // Aktifkan tombol simpan jika berupa huruf A-Z
                     if (/[A-Z]/.test(gestureData.letter)) {
                         lastDetectedLetter = gestureData.letter;
                         btnAddLetter.disabled = false;
+                        btnAddLetter.classList.remove('disabled:bg-gray-50');
                     } else {
                         btnAddLetter.disabled = true;
                     }
                 } else {
                     currentGestureEl.innerText = "?";
-                    currentGestureEl.classList.remove('text-emerald-400');
-                    currentGestureEl.classList.add('text-white');
+                    currentGestureEl.classList.remove('text-pink-500');
+                    currentGestureEl.classList.add('text-purple-300');
+                    
                     gestureDescEl.innerText = "Tidak Dikenali";
-                    gestureDescEl.classList.remove('text-emerald-300');
-                    gestureDescEl.classList.add('text-slate-400');
+                    gestureDescEl.classList.remove('text-pink-700', 'bg-pink-100');
+                    gestureDescEl.classList.add('text-purple-500', 'bg-white/50');
                     btnAddLetter.disabled = true;
                 }
             }
 
             if (!detected) {
                 currentGestureEl.innerText = "-";
-                currentGestureEl.classList.add('text-slate-600');
+                currentGestureEl.classList.remove('text-pink-500');
+                currentGestureEl.classList.add('text-purple-300');
+                
                 gestureDescEl.innerText = "Belum ada tangan";
-                gestureDescEl.classList.add('text-slate-500');
+                gestureDescEl.classList.remove('text-pink-700', 'bg-pink-100');
+                gestureDescEl.classList.add('text-purple-500', 'bg-white/50');
                 btnAddLetter.disabled = true;
                 lastDetectedLetter = "";
             }
@@ -338,75 +392,71 @@
             canvasCtx.restore();
         }
 
-        // Inisialisasi MediaPipe Hands
         const hands = new Hands({locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
         }});
         
         hands.setOptions({
-            maxNumHands: 1,           // Fokus pada 1 tangan untuk akurasi
-            modelComplexity: 1,       // Keseimbangan kecepatan dan akurasi (0 atau 1)
+            maxNumHands: 1,
+            modelComplexity: 1,
             minDetectionConfidence: 0.6,
             minTrackingConfidence: 0.5
         });
         
         hands.onResults(onResults);
 
-        // Fungsi Pembaruan UI Teks
         function updateWordDisplay() {
             if (currentWord === "") {
-                constructedWordEl.innerHTML = '<span class="text-slate-600">...</span>';
+                constructedWordEl.innerHTML = '<span class="text-purple-300">...</span>';
             } else {
                 constructedWordEl.innerText = currentWord;
             }
         }
 
-        // Event Listeners untuk UI
+        // Event Listeners Buttons
         btnAddLetter.addEventListener('click', () => {
             if (lastDetectedLetter) {
                 currentWord += lastDetectedLetter;
                 updateWordDisplay();
                 
-                // Efek visual tombol ditekan
-                btnAddLetter.innerText = "✔️ Ditambahkan!";
-                btnAddLetter.classList.add('from-emerald-600', 'to-emerald-500');
+                // Visual feedback
+                const originalText = btnAddLetter.innerText;
+                btnAddLetter.innerText = "✔️ Disimpan!";
+                btnAddLetter.classList.add('bg-pink-500', 'text-white');
+                btnAddLetter.classList.remove('text-pink-600', 'bg-white');
                 setTimeout(() => {
                     btnAddLetter.innerText = "+ Simpan Huruf";
-                    btnAddLetter.classList.remove('from-emerald-600', 'to-emerald-500');
-                }, 500);
+                    btnAddLetter.classList.remove('bg-pink-500', 'text-white');
+                    btnAddLetter.classList.add('text-pink-600', 'bg-white');
+                }, 600);
             }
         });
 
-        btnClear.addEventListener('click', () => {
-            currentWord = "";
-            updateWordDisplay();
-        });
+        btnClear.addEventListener('click', () => { currentWord = ""; updateWordDisplay(); });
+        btnSpace.addEventListener('click', () => { if(currentWord !== "") { currentWord += " "; updateWordDisplay(); } });
+        btnBackspace.addEventListener('click', () => { if (currentWord.length > 0) { currentWord = currentWord.slice(0, -1); updateWordDisplay(); } });
 
-        btnSpace.addEventListener('click', () => {
-            if(currentWord !== "") {
-                currentWord += " ";
-                updateWordDisplay();
-            }
-        });
-
-        btnBackspace.addEventListener('click', () => {
-            if (currentWord.length > 0) {
-                currentWord = currentWord.slice(0, -1);
-                updateWordDisplay();
-            }
-        });
-
-        // Kontrol Kamera
         btnToggleCam.addEventListener('click', async () => {
             if (!isCameraRunning) {
-                btnToggleCam.innerText = "Menyiapkan Kamera...";
+                // UI Loading State
+                btnToggleCam.innerText = "Meminta Akses...";
                 btnToggleCam.disabled = true;
+                loadingScreen.classList.remove('hidden');
+                loaderSpinner.style.display = 'block';
+                loadingText.innerText = "Meminta izin kamera...";
+                loadingSubtext.innerText = "Klik 'Izinkan' (Allow) pada popup di browsermu.";
                 
                 try {
-                    // Inisialisasi utilitas kamera dari MediaPipe
+                    // Pre-check camera access to give better error on GitHub Pages/Local
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    // Matikan stream segera, karena MediaPipe Camera_Utils akan meminta stream-nya sendiri
+                    stream.getTracks().forEach(track => track.stop());
+
+                    loadingText.innerText = "Memuat Model AI...";
+                    loadingSubtext.innerText = "Mohon tunggu sebentar, ini membutuhkan waktu beberapa detik pada run pertama.";
+
                     camera = new Camera(videoElement, {
                         onFrame: async () => {
-                            // Kirim frame video ke detektor Hands
                             await hands.send({image: videoElement});
                         },
                         width: 640,
@@ -415,38 +465,54 @@
                     
                     await camera.start();
                     isCameraRunning = true;
+                    
+                    // UI Update setelah jalan
                     btnToggleCam.innerText = "Matikan Kamera";
-                    btnToggleCam.classList.remove('bg-blue-600', 'hover:bg-blue-500');
-                    btnToggleCam.classList.add('bg-red-600', 'hover:bg-red-500', 'shadow-red-500/30');
+                    btnToggleCam.classList.remove('from-pink-500', 'to-purple-500', 'shadow-pink-300/50');
+                    btnToggleCam.classList.add('bg-gray-800', 'hover:bg-gray-700', 'shadow-gray-300/50');
                     btnToggleCam.disabled = false;
+
                 } catch (error) {
-                    console.error("Gagal mengakses kamera:", error);
-                    alert("Gagal mengakses kamera. Pastikan browser diizinkan mengakses webcam.");
+                    console.error("Error Kamera:", error);
+                    let errorMsg = "Gagal mengakses kamera. ";
+                    if(error.name === "NotAllowedError") {
+                        errorMsg += "Kamu memblokir izin kamera. Silakan ubah pengaturan browsermu (ikon gembok di sebelah URL).";
+                    } else if (error.name === "NotFoundError") {
+                        errorMsg += "Kamera tidak ditemukan di perangkatmu.";
+                    } else {
+                        errorMsg += "Pastikan kamu membuka web ini lewat HTTPS (GitHub Pages aman).";
+                    }
+                    
+                    loadingText.innerText = "Akses Ditolak / Gagal";
+                    loadingText.classList.add('text-red-500');
+                    loadingSubtext.innerText = errorMsg;
+                    loaderSpinner.style.display = 'none';
+                    
                     btnToggleCam.innerText = "Coba Lagi";
                     btnToggleCam.disabled = false;
-                    loadingScreen.style.display = 'none';
                 }
             } else {
                 if (camera) {
                     await camera.stop();
                 }
                 isCameraRunning = false;
-                btnToggleCam.innerText = "Mulai Kamera";
-                btnToggleCam.classList.remove('bg-red-600', 'hover:bg-red-500', 'shadow-red-500/30');
-                btnToggleCam.classList.add('bg-blue-600', 'hover:bg-blue-500');
                 
-                // Bersihkan canvas
+                // UI Reset
+                btnToggleCam.innerText = "Mulai Kamera";
+                btnToggleCam.classList.remove('bg-gray-800', 'hover:bg-gray-700', 'shadow-gray-300/50');
+                btnToggleCam.classList.add('from-pink-500', 'to-purple-500', 'shadow-pink-300/50');
+                
                 canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-                loadingScreen.style.display = 'flex';
-                loadingScreen.querySelector('p.text-lg').innerText = "Kamera Dijeda";
-                loadingScreen.querySelector('.loader').style.display = 'none';
+                loadingScreen.classList.remove('hidden');
+                loadingText.innerText = "Kamera Dimatikan";
+                loadingText.classList.remove('text-red-500');
+                loadingSubtext.innerText = "Klik 'Mulai Kamera' untuk menyalakannya kembali.";
+                loaderSpinner.style.display = 'none';
             }
         });
 
-        // Tampilkan teks awal pada loading screen sebelum klik mulai
-        loadingScreen.querySelector('p.text-lg').innerText = "Klik 'Mulai Kamera' untuk mencoba.";
-        loadingScreen.querySelector('.loader').style.display = 'none';
-
+        // Tampilan awal loader (tanpa animasi muter)
+        loaderSpinner.style.display = 'none';
     </script>
 </body>
 </html>
