@@ -3,104 +3,450 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC VidCall dengan PeerJS</title>
-    <!-- Memuat Tailwind CSS untuk styling cepat -->
+    <title>Penerjemah Bahasa Isyarat AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Memuat PeerJS dari CDN -->
-    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc; /* Slate 50 */
+        }
+        
+        /* Mirror video and canvas */
+        .mirrored {
+            transform: scaleX(-1);
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7); /* Slate 800 with opacity */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #3b82f6; /* Blue 500 */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen p-6 font-sans flex flex-col items-center">
+<body class="min-h-screen flex flex-col items-center p-4 md:p-8">
 
-    <div class="max-w-4xl w-full">
-        <!-- Header & Info ID -->
-        <div class="bg-gray-800 p-6 rounded-xl shadow-lg mb-6 border border-gray-700">
-            <h1 class="text-2xl font-bold mb-4 text-emerald-400">Mini VidCall App</h1>
-            <p class="text-gray-400 mb-2">ID Perangkat Kamu:</p>
-            <div class="flex items-center gap-4">
-                <code id="my-id" class="bg-gray-900 px-4 py-2 rounded text-lg text-yellow-300 font-mono flex-1 border border-gray-700">Memuat ID...</code>
+    <!-- Header -->
+    <header class="w-full max-w-5xl flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
+                SignLanguage AI
+            </h1>
+            <p class="text-slate-400 mt-2">Prototipe Pendeteksi Pola Jari & Penerjemah Isyarat</p>
+        </div>
+        <div class="hidden md:flex items-center space-x-2 text-sm text-slate-400 bg-slate-800 py-2 px-4 rounded-full">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            <span>MediaPipe Hands Aktif</span>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Camera Section (Left) -->
+        <section class="lg:col-span-2 glass-panel rounded-3xl overflow-hidden shadow-2xl relative flex flex-col">
+            
+            <!-- Loading Screen Overlay -->
+            <div id="loading-screen" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-sm">
+                <div class="loader mb-4"></div>
+                <p class="text-lg font-semibold animate-pulse text-blue-400">Memuat Model AI & Kamera...</p>
+                <p class="text-sm text-slate-400 mt-2 text-center px-4">Pastikan kamu memberikan izin akses kamera pada browser.</p>
+            </div>
+
+            <!-- Video & Canvas Container -->
+            <div class="relative w-full aspect-video bg-black flex-grow">
+                <video id="input_video" class="absolute inset-0 w-full h-full object-cover mirrored hidden" playsinline></video>
+                <canvas id="output_canvas" class="absolute inset-0 w-full h-full object-cover mirrored z-10"></canvas>
             </div>
             
-            <hr class="border-gray-700 my-6">
-
-            <!-- Form Panggilan -->
-            <p class="text-gray-400 mb-2">Hubungi Teman:</p>
-            <div class="flex gap-4">
-                <input type="text" id="remote-id" placeholder="Masukkan ID teman di sini" class="flex-1 bg-gray-900 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-emerald-500 text-white">
-                <button id="call-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded font-semibold transition">Panggil</button>
+            <div class="p-4 bg-slate-800/50 flex justify-between items-center z-10 border-t border-slate-700">
+                <p class="text-sm text-slate-300">Arahkan tanganmu ke kamera dengan jelas.</p>
+                <button id="btn-toggle-cam" class="bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 rounded-xl text-sm font-semibold transition-colors duration-200 shadow-lg shadow-blue-500/30">
+                    Mulai Kamera
+                </button>
             </div>
-        </div>
+        </section>
 
-        <!-- Area Video -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Video Lokal -->
-            <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 relative shadow-lg">
-                <p class="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white z-10">Kamera Kamu</p>
-                <video id="local-video" autoplay muted playsinline class="w-full h-64 object-cover bg-black transform scale-x-[-1]"></video>
-            </div>
+        <!-- Translation Results Section (Right) -->
+        <section class="flex flex-col gap-6">
             
-            <!-- Video Remote -->
-            <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 relative shadow-lg">
-                <p class="absolute top-2 left-2 bg-emerald-500/80 px-2 py-1 rounded text-xs text-white z-10">Kamera Teman</p>
-                <video id="remote-video" autoplay playsinline class="w-full h-64 object-cover bg-black"></video>
+            <!-- Current Detection Card -->
+            <div class="glass-panel p-6 rounded-3xl flex flex-col items-center justify-center shadow-xl border-t-4 border-blue-500 text-center relative overflow-hidden">
+                <div class="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/20 blur-3xl rounded-full"></div>
+                <p class="text-slate-400 text-sm font-medium mb-2 z-10">Mendeteksi Pola</p>
+                <div class="h-32 flex items-center justify-center z-10">
+                    <h2 id="current-gesture" class="text-7xl font-bold text-white tracking-tighter drop-shadow-md">?</h2>
+                </div>
+                <p id="gesture-desc" class="text-blue-400 text-sm font-medium mt-2 z-10 h-6">Belum ada tangan</p>
+                
+                <button id="btn-add-letter" class="mt-6 w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white py-3 px-4 rounded-xl font-bold transition-all duration-200 transform active:scale-95 shadow-lg shadow-purple-500/25 z-10 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    + Simpan Huruf
+                </button>
+            </div>
+
+            <!-- Word Builder Card -->
+            <div class="glass-panel p-6 rounded-3xl shadow-xl flex-grow flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-slate-200">Kata Dirangkai</h3>
+                    <button id="btn-clear" class="text-slate-400 hover:text-red-400 transition-colors text-sm font-medium">Hapus</button>
+                </div>
+                <div class="bg-slate-900/50 rounded-2xl p-4 flex-grow flex items-center justify-center border border-slate-700/50 min-h-[100px]">
+                    <p id="constructed-word" class="text-3xl font-mono font-bold tracking-widest text-emerald-400 break-words text-center">
+                        <span class="text-slate-600">...</span>
+                    </p>
+                </div>
+                <div class="flex gap-2 mt-4">
+                    <button id="btn-space" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-xl text-sm transition-colors">Spasi</button>
+                    <button id="btn-backspace" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-xl text-sm transition-colors">Backspace</button>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Instructions Guide -->
+    <section class="w-full max-w-5xl mt-8 glass-panel rounded-3xl p-6 md:p-8">
+        <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
+            <span class="text-blue-400">💡</span> Panduan Gestur yang Didukung
+        </h3>
+        <p class="text-slate-400 text-sm mb-6 max-w-3xl">Karena ini adalah prototipe, sistem menggunakan logika kondisi jari (terbuka/tertutup). Cobalah bentuk tangan berikut ke kamera. Gunakan tangan kanan untuk hasil terbaik.</p>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                <span class="text-2xl font-bold text-white block mb-1">A</span>
+                <span class="text-slate-400">Ibu jari terbuka ke samping, jari lain mengepal.</span>
+            </div>
+            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                <span class="text-2xl font-bold text-white block mb-1">B</span>
+                <span class="text-slate-400">Keempat jari lurus ke atas, ibu jari ditekuk ke dalam.</span>
+            </div>
+            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                <span class="text-2xl font-bold text-white block mb-1">D</span>
+                <span class="text-slate-400">Jari telunjuk ke atas, jari lain membulat/mengepal.</span>
+            </div>
+            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                <span class="text-2xl font-bold text-white block mb-1">I</span>
+                <span class="text-slate-400">Hanya jari kelingking yang lurus ke atas.</span>
+            </div>
+            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                <span class="text-2xl font-bold text-white block mb-1">L</span>
+                <span class="text-slate-400">Ibu jari dan telunjuk membentuk huruf L.</span>
+            </div>
+            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                <span class="text-2xl font-bold text-white block mb-1">V</span>
+                <span class="text-slate-400">Telunjuk dan tengah ke atas (peace).</span>
+            </div>
+            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                <span class="text-2xl font-bold text-white block mb-1">W</span>
+                <span class="text-slate-400">Telunjuk, tengah, dan manis ke atas.</span>
+            </div>
+            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
+                <span class="text-2xl font-bold text-white block mb-1">Y</span>
+                <span class="text-slate-400">Ibu jari dan kelingking terbuka (telepon).</span>
             </div>
         </div>
-    </div>
+    </section>
 
     <script>
-        // 1. Inisialisasi PeerJS
-        // Secara default akan mengkoneksikan ke server gratis milik PeerJS
-        const peer = new Peer();
-        let localStream;
+        // DOM Elements
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const loadingScreen = document.getElementById('loading-screen');
+        const currentGestureEl = document.getElementById('current-gesture');
+        const gestureDescEl = document.getElementById('gesture-desc');
+        const btnAddLetter = document.getElementById('btn-add-letter');
+        const constructedWordEl = document.getElementById('constructed-word');
+        const btnToggleCam = document.getElementById('btn-toggle-cam');
+        const btnClear = document.getElementById('btn-clear');
+        const btnSpace = document.getElementById('btn-space');
+        const btnBackspace = document.getElementById('btn-backspace');
 
-        const myIdEl = document.getElementById('my-id');
-        const remoteIdInput = document.getElementById('remote-id');
-        const callBtn = document.getElementById('call-btn');
-        const localVideo = document.getElementById('local-video');
-        const remoteVideo = document.getElementById('remote-video');
+        let isCameraRunning = false;
+        let camera = null;
+        let lastDetectedLetter = "";
+        let currentWord = "";
 
-        // Saat berhasil terhubung ke server, tampilkan ID kita
-        peer.on('open', (id) => {
-            myIdEl.textContent = id;
-        });
+        // Fungsi Pembantu: Menghitung Jarak Euclidean 2D
+        function getDistance(p1, p2) {
+            return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+        }
 
-        // 2. Akses Kamera dan Mikrofon
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then((stream) => {
-                localStream = stream;
-                localVideo.srcObject = stream;
-            })
-            .catch((err) => {
-                console.error("Gagal mengakses kamera:", err);
-                alert("Tolong izinkan akses kamera dan mikrofon di browser!");
-            });
-
-        // 3. Menangani Panggilan Masuk
-        peer.on('call', (call) => {
-            // Jawab panggilan masuk dengan mengirimkan video/audio kita
-            call.answer(localStream);
+        function detectGesture(landmarks) {
+            // Evaluasi Jari Terbuka (Extended) atau Tertutup
+            // Logika dasar: Bandingkan posisi Ujung Jari (Tip) dengan Buku Jari Tengah (PIP)
             
-            // Saat menerima stream dari teman, tampilkan di elemen remote-video
-            call.on('stream', (remoteStream) => {
-                remoteVideo.srcObject = remoteStream;
-            });
-        });
+            // Jari Telunjuk (Index), Tengah (Middle), Manis (Ring), Kelingking (Pinky)
+            const isExtended = (tipIndex, pipIndex) => {
+                // Di layar kamera, sumbu Y mengecil ke arah atas layar.
+                // Jadi jika Y ujung jari < Y buku jari, berarti jari mengarah ke atas (terbuka).
+                return landmarks[tipIndex].y < landmarks[pipIndex].y;
+            };
 
-        // 4. Melakukan Panggilan Keluar
-        callBtn.addEventListener('click', () => {
-            const remoteId = remoteIdInput.value.trim();
-            if (!remoteId) {
-                alert("Masukkan ID tujuan terlebih dahulu!");
-                return;
+            const indexOut = isExtended(8, 6);
+            const middleOut = isExtended(12, 10);
+            const ringOut = isExtended(16, 14);
+            const pinkyOut = isExtended(20, 18);
+
+            // Logika Ibu Jari (Thumb) sedikit berbeda karena arah putarannya.
+            // Kita bandingkan jarak ujung ibu jari(4) dengan pangkal kelingking(17).
+            // Jika ibu jari terbuka, jaraknya akan lebih jauh dibanding jarak buku ibu jari(3) ke pangkal kelingking.
+            const distThumbTip = getDistance(landmarks[4], landmarks[17]);
+            const distThumbIp = getDistance(landmarks[3], landmarks[17]);
+            const thumbOut = distThumbTip > distThumbIp + 0.02; // +0.02 sebagai margin toleransi
+
+            // Array Status Jari: [IbuJari, Telunjuk, Tengah, Manis, Kelingking]
+            const f = [thumbOut, indexOut, middleOut, ringOut, pinkyOut];
+
+            // Fungsi pembantu untuk mencocokkan pola
+            const match = (pattern) => {
+                return f[0] === pattern[0] && f[1] === pattern[1] && 
+                       f[2] === pattern[2] && f[3] === pattern[3] && f[4] === pattern[4];
+            };
+
+            // PEMETAAN GESTUR (Berdasarkan ASL Sederhana)
+            // A: Ibu jari saja yang terbuka/di samping
+            if (match([true, false, false, false, false])) return { letter: "A", name: "Jempol / A" };
+            
+            // B: Semua jari kecuali jempol ke atas
+            if (match([false, true, true, true, true])) return { letter: "B", name: "Rapat Terbuka / B" };
+            
+            // D: Telunjuk saja (seperti menunjuk)
+            if (match([false, true, false, false, false])) return { letter: "D", name: "Telunjuk / D" };
+            
+            // I: Kelingking saja
+            if (match([false, false, false, false, true])) return { letter: "I", name: "Kelingking / I" };
+            
+            // L: Jempol & Telunjuk
+            if (match([true, true, false, false, false])) return { letter: "L", name: "Bentuk L" };
+            
+            // V / Peace: Telunjuk & Tengah
+            if (match([false, true, true, false, false])) return { letter: "V", name: "Peace / V" };
+            
+            // W: Telunjuk, Tengah, Manis
+            if (match([false, true, true, true, false])) return { letter: "W", name: "Tiga Jari / W" };
+            
+            // Y / Telepon: Jempol & Kelingking
+            if (match([true, false, false, false, true])) return { letter: "Y", name: "Telepon / Y" };
+
+            // Gestur tambahan non-huruf
+            if (match([true, true, true, true, true])) return { letter: "✋", name: "Terbuka (Lima)" };
+            if (match([false, false, false, false, false])) return { letter: "✊", name: "Mengepal (S)" };
+
+            return { letter: "?", name: "Tidak Dikenali" };
+        }
+
+        function onResults(results) {
+            // Sembunyikan loading screen saat frame pertama berhasil diproses
+            if(loadingScreen.style.display !== 'none') {
+                loadingScreen.style.display = 'none';
             }
 
-            // Panggil ID tujuan dan kirimkan stream kita
-            const call = peer.call(remoteId, localStream);
+            // Atur ukuran canvas menyesuaikan video
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             
-            // Tangkap balasan stream dari teman
-            call.on('stream', (remoteStream) => {
-                remoteVideo.srcObject = remoteStream;
-            });
+            // Opsional: Gambar frame video asli ke canvas jika ingin menghilangkan border/styling bawaan video
+            // canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            let detected = false;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                detected = true;
+                
+                // Ambil tangan pertama yang terdeteksi
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Gambar garis koneksi kerangka tangan
+                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {
+                    color: '#3b82f6', // Blue 500
+                    lineWidth: 4
+                });
+                // Gambar titik (landmarks) sendi
+                drawLandmarks(canvasCtx, landmarks, {
+                    color: '#10b981', // Emerald 500
+                    lineWidth: 2,
+                    radius: (data) => {
+                        return data.from ? 4 : 2;
+                    }
+                });
+
+                // Analisis Gestur
+                const gestureData = detectGesture(landmarks);
+                
+                if (gestureData.letter !== "?") {
+                    currentGestureEl.innerText = gestureData.letter;
+                    currentGestureEl.classList.remove('text-white', 'text-slate-600');
+                    currentGestureEl.classList.add('text-emerald-400');
+                    
+                    gestureDescEl.innerText = gestureData.name;
+                    gestureDescEl.classList.remove('text-blue-400');
+                    gestureDescEl.classList.add('text-emerald-300');
+
+                    // Aktifkan tombol simpan jika berupa huruf A-Z
+                    if (/[A-Z]/.test(gestureData.letter)) {
+                        lastDetectedLetter = gestureData.letter;
+                        btnAddLetter.disabled = false;
+                    } else {
+                        btnAddLetter.disabled = true;
+                    }
+                } else {
+                    currentGestureEl.innerText = "?";
+                    currentGestureEl.classList.remove('text-emerald-400');
+                    currentGestureEl.classList.add('text-white');
+                    gestureDescEl.innerText = "Tidak Dikenali";
+                    gestureDescEl.classList.remove('text-emerald-300');
+                    gestureDescEl.classList.add('text-slate-400');
+                    btnAddLetter.disabled = true;
+                }
+            }
+
+            if (!detected) {
+                currentGestureEl.innerText = "-";
+                currentGestureEl.classList.add('text-slate-600');
+                gestureDescEl.innerText = "Belum ada tangan";
+                gestureDescEl.classList.add('text-slate-500');
+                btnAddLetter.disabled = true;
+                lastDetectedLetter = "";
+            }
+
+            canvasCtx.restore();
+        }
+
+        // Inisialisasi MediaPipe Hands
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+        
+        hands.setOptions({
+            maxNumHands: 1,           // Fokus pada 1 tangan untuk akurasi
+            modelComplexity: 1,       // Keseimbangan kecepatan dan akurasi (0 atau 1)
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.5
         });
+        
+        hands.onResults(onResults);
+
+        // Fungsi Pembaruan UI Teks
+        function updateWordDisplay() {
+            if (currentWord === "") {
+                constructedWordEl.innerHTML = '<span class="text-slate-600">...</span>';
+            } else {
+                constructedWordEl.innerText = currentWord;
+            }
+        }
+
+        // Event Listeners untuk UI
+        btnAddLetter.addEventListener('click', () => {
+            if (lastDetectedLetter) {
+                currentWord += lastDetectedLetter;
+                updateWordDisplay();
+                
+                // Efek visual tombol ditekan
+                btnAddLetter.innerText = "✔️ Ditambahkan!";
+                btnAddLetter.classList.add('from-emerald-600', 'to-emerald-500');
+                setTimeout(() => {
+                    btnAddLetter.innerText = "+ Simpan Huruf";
+                    btnAddLetter.classList.remove('from-emerald-600', 'to-emerald-500');
+                }, 500);
+            }
+        });
+
+        btnClear.addEventListener('click', () => {
+            currentWord = "";
+            updateWordDisplay();
+        });
+
+        btnSpace.addEventListener('click', () => {
+            if(currentWord !== "") {
+                currentWord += " ";
+                updateWordDisplay();
+            }
+        });
+
+        btnBackspace.addEventListener('click', () => {
+            if (currentWord.length > 0) {
+                currentWord = currentWord.slice(0, -1);
+                updateWordDisplay();
+            }
+        });
+
+        // Kontrol Kamera
+        btnToggleCam.addEventListener('click', async () => {
+            if (!isCameraRunning) {
+                btnToggleCam.innerText = "Menyiapkan Kamera...";
+                btnToggleCam.disabled = true;
+                
+                try {
+                    // Inisialisasi utilitas kamera dari MediaPipe
+                    camera = new Camera(videoElement, {
+                        onFrame: async () => {
+                            // Kirim frame video ke detektor Hands
+                            await hands.send({image: videoElement});
+                        },
+                        width: 640,
+                        height: 480
+                    });
+                    
+                    await camera.start();
+                    isCameraRunning = true;
+                    btnToggleCam.innerText = "Matikan Kamera";
+                    btnToggleCam.classList.remove('bg-blue-600', 'hover:bg-blue-500');
+                    btnToggleCam.classList.add('bg-red-600', 'hover:bg-red-500', 'shadow-red-500/30');
+                    btnToggleCam.disabled = false;
+                } catch (error) {
+                    console.error("Gagal mengakses kamera:", error);
+                    alert("Gagal mengakses kamera. Pastikan browser diizinkan mengakses webcam.");
+                    btnToggleCam.innerText = "Coba Lagi";
+                    btnToggleCam.disabled = false;
+                    loadingScreen.style.display = 'none';
+                }
+            } else {
+                if (camera) {
+                    await camera.stop();
+                }
+                isCameraRunning = false;
+                btnToggleCam.innerText = "Mulai Kamera";
+                btnToggleCam.classList.remove('bg-red-600', 'hover:bg-red-500', 'shadow-red-500/30');
+                btnToggleCam.classList.add('bg-blue-600', 'hover:bg-blue-500');
+                
+                // Bersihkan canvas
+                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                loadingScreen.style.display = 'flex';
+                loadingScreen.querySelector('p.text-lg').innerText = "Kamera Dijeda";
+                loadingScreen.querySelector('.loader').style.display = 'none';
+            }
+        });
+
+        // Tampilkan teks awal pada loading screen sebelum klik mulai
+        loadingScreen.querySelector('p.text-lg').innerText = "Klik 'Mulai Kamera' untuk mencoba.";
+        loadingScreen.querySelector('.loader').style.display = 'none';
+
     </script>
 </body>
 </html>
