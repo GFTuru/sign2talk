@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC VidCall dengan PeerJS</title>
+    <!-- Memuat Tailwind CSS untuk styling cepat -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Memuat PeerJS dari CDN -->
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-6 font-sans flex flex-col items-center">
+
+    <div class="max-w-4xl w-full">
+        <!-- Header & Info ID -->
+        <div class="bg-gray-800 p-6 rounded-xl shadow-lg mb-6 border border-gray-700">
+            <h1 class="text-2xl font-bold mb-4 text-emerald-400">Mini VidCall App</h1>
+            <p class="text-gray-400 mb-2">ID Perangkat Kamu:</p>
+            <div class="flex items-center gap-4">
+                <code id="my-id" class="bg-gray-900 px-4 py-2 rounded text-lg text-yellow-300 font-mono flex-1 border border-gray-700">Memuat ID...</code>
+            </div>
+            
+            <hr class="border-gray-700 my-6">
+
+            <!-- Form Panggilan -->
+            <p class="text-gray-400 mb-2">Hubungi Teman:</p>
+            <div class="flex gap-4">
+                <input type="text" id="remote-id" placeholder="Masukkan ID teman di sini" class="flex-1 bg-gray-900 border border-gray-600 rounded px-4 py-2 focus:outline-none focus:border-emerald-500 text-white">
+                <button id="call-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded font-semibold transition">Panggil</button>
+            </div>
+        </div>
+
+        <!-- Area Video -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Video Lokal -->
+            <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 relative shadow-lg">
+                <p class="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white z-10">Kamera Kamu</p>
+                <video id="local-video" autoplay muted playsinline class="w-full h-64 object-cover bg-black transform scale-x-[-1]"></video>
+            </div>
+            
+            <!-- Video Remote -->
+            <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 relative shadow-lg">
+                <p class="absolute top-2 left-2 bg-emerald-500/80 px-2 py-1 rounded text-xs text-white z-10">Kamera Teman</p>
+                <video id="remote-video" autoplay playsinline class="w-full h-64 object-cover bg-black"></video>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. Inisialisasi PeerJS
+        // Secara default akan mengkoneksikan ke server gratis milik PeerJS
+        const peer = new Peer();
+        let localStream;
+
+        const myIdEl = document.getElementById('my-id');
+        const remoteIdInput = document.getElementById('remote-id');
+        const callBtn = document.getElementById('call-btn');
+        const localVideo = document.getElementById('local-video');
+        const remoteVideo = document.getElementById('remote-video');
+
+        // Saat berhasil terhubung ke server, tampilkan ID kita
+        peer.on('open', (id) => {
+            myIdEl.textContent = id;
+        });
+
+        // 2. Akses Kamera dan Mikrofon
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then((stream) => {
+                localStream = stream;
+                localVideo.srcObject = stream;
+            })
+            .catch((err) => {
+                console.error("Gagal mengakses kamera:", err);
+                alert("Tolong izinkan akses kamera dan mikrofon di browser!");
+            });
+
+        // 3. Menangani Panggilan Masuk
+        peer.on('call', (call) => {
+            // Jawab panggilan masuk dengan mengirimkan video/audio kita
+            call.answer(localStream);
+            
+            // Saat menerima stream dari teman, tampilkan di elemen remote-video
+            call.on('stream', (remoteStream) => {
+                remoteVideo.srcObject = remoteStream;
+            });
+        });
+
+        // 4. Melakukan Panggilan Keluar
+        callBtn.addEventListener('click', () => {
+            const remoteId = remoteIdInput.value.trim();
+            if (!remoteId) {
+                alert("Masukkan ID tujuan terlebih dahulu!");
+                return;
+            }
+
+            // Panggil ID tujuan dan kirimkan stream kita
+            const call = peer.call(remoteId, localStream);
+            
+            // Tangkap balasan stream dari teman
+            call.on('stream', (remoteStream) => {
+                remoteVideo.srcObject = remoteStream;
+            });
+        });
+    </script>
+</body>
+</html>
